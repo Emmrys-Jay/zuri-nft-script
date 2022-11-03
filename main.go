@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -72,7 +73,7 @@ func convertRecords(r *[][]string, filename string) *[]Record {
 	}
 
 	for k := 0; k < len(*r); k++ {
-		if k == 1 {
+		if k == 0 {
 			(*r)[k] = append((*r)[k], "SHA256")
 			continue
 		}
@@ -154,6 +155,8 @@ func isTeamName(record *Record) bool {
 
 // writeCSV creates a new csv file and writes the new data into it
 func writeCSV(filename string, records *[][]string) {
+	filename = strings.TrimSuffix(filename, ".csv")
+
 	file, err := os.Create(filename + ".output.csv")
 	if err != nil {
 		log.Fatal("error: Could not create output csv file")
@@ -174,32 +177,26 @@ func createJsonDir(name string) error {
 	return nil
 }
 
-// generateJSONFileSHA256 generates a creates a json file for a JSON data,
-// and finds the SHA256 hash of the json file
-func generateJSONFileSHA256(filename string, dirName string, json []byte) ([]byte, error) {
+// generateJSONFileSHA256 generates a json file for a JSON data,
+// and returns the SHA256 hash of the input json
+func generateJSONFileSHA256(filename string, dirName string, json []byte) (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	path := filepath.Join(wd, dirName, filename+".json")
 	file, err := os.Create(path)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer file.Close()
 
 	_, err = io.Copy(file, bytes.NewReader(json))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	hash := sha256.New()
-	_, err = io.Copy(hash, file)
-	if err != nil {
-		return nil, err
-	}
-
-	sha := hash.Sum(nil)
-	return sha, nil
+	sha := sha256.Sum256(json)
+	return fmt.Sprintf("%x", sha), nil
 }
