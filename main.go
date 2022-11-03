@@ -93,7 +93,7 @@ func convertRecords(r *[][]string, filename string) *[]Record {
 			UUID: (*r)[k][6],
 		}
 
-		attrbs := strings.Split((*r)[k][5], ",")
+		attrbs := strings.Split((*r)[k][5], ";")
 		if len(attrbs) > 1 && attrbs[0] != "" {
 			for _, v := range attrbs {
 				i := strings.Split(v, ":")
