@@ -7,7 +7,7 @@ according to the CHIP-0007 standard for CHIA wallet.
 
 `golang 1.17` or higher
 
-## How to Setup
+## How to use this project
 
 - Clone this repository using:
 
