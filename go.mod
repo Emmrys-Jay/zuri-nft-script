@@ -1,3 +1,3 @@
-module github.com/Emmrys-Jay/csv-to-json
+module github.com/Emmrys-Jay/zuri-nft-script
 
 go 1.19
