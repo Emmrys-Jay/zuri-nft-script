@@ -16,25 +16,53 @@ import (
 	"strings"
 )
 
-// Record models each row in the csv file
-type Record struct {
-	Format           string      `json:"format" default:"CHIP-0007"`
-	Name             string      `json:"name"`
-	Description      string      `json:"description"`
-	MintingTool      string      `json:"minting_tool"`
-	SensitiveContent bool        `json:"sensitive_content"`
-	SeriesNumber     int         `json:"series_number"`
-	SeriesTotal      int         `json:"series_total"`
-	Attributes       []Attribute `json:"attributes"`
-	UUID             string      `json:"uuid"`
-	Hash             string      `json:"sha256,omitempty"`
-}
+// These constant variables represent the ordering of each fields in the input csv file
+const (
+	TEAM_NAMES = iota
+	SERIES_NUMBER
+	FILENAME
+	NAME
+	DESCRIPTION
+	GENDER
+	ATTRIBUTES
+	UUID
+)
 
-// Attribute models each attribute from the csv file
-type Attribute struct {
-	TraitType string `json:"trait_type"`
-	Value     string `json:"value"`
-}
+type (
+	// Record models each row in the csv file
+	Record struct {
+		Format           string      `json:"format" default:"CHIP-0007"`
+		Name             string      `json:"name"`
+		Description      string      `json:"description"`
+		MintingTool      string      `json:"minting_tool"`
+		SensitiveContent bool        `json:"sensitive_content"`
+		SeriesNumber     int         `json:"series_number"`
+		SeriesTotal      int         `json:"series_total"`
+		Gender           string      `json:"gender"`
+		Attributes       []Attribute `json:"attributes"`
+		UUID             string      `json:"uuid"`
+		Collections      Collection  `json:"collection"`
+	}
+
+	// Attribute models each attribute from the csv file
+	Attribute struct {
+		TraitType string `json:"trait_type"`
+		Value     string `json:"value"`
+	}
+
+	// Collection models the collection json collection fiels
+	Collection struct {
+		Name       string       `json:"name"`
+		ID         string       `json:"id"`
+		Attributes []CAttribute `json:"attributes"`
+	}
+
+	// CAttribute models attribute objects under collection
+	CAttribute struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	}
+)
 
 func main() {
 	csvFile := flag.String("csv", "hngi9-csv-file.csv", "a csv file containing hng files")
@@ -51,56 +79,57 @@ func main() {
 		log.Fatalf("error: Could not read file %v\n", *csvFile)
 	}
 
-	_ = convertRecords(&records, *csvFile)
+	err = convertRecords(&records, *csvFile)
+	if err != nil {
+		log.Fatalf("convertRecords: %v", err)
+	}
 
-	writeCSV(*csvFile, &records)
+	err = writeCSV(*csvFile, &records)
+	if err != nil {
+		log.Fatalf("writeCSV: %v", err)
+	}
 }
 
 // convertRecords performs all basic logic required to parse a csv file, generate its JSON,
-// and output an updated csv file in a step by step order
-func convertRecords(r *[][]string, filename string) *[]Record {
+// and modify a slice to form an updated csv file in a step by step order
+func convertRecords(r *[][]string, filename string) error {
 	records := make([]Record, 0)
 	var mintingTool string
 
 	// name of directory where all JSON files will be stored
 	dir := "nft-jsons"
 
-	err := createJsonDir(dir)
-	if err != nil {
+	if err := createJsonDir(dir); err != nil {
 		if !errors.Is(err, os.ErrExist) {
-			log.Fatalf("error: Could not create dir %v, got error %v", dir, err)
+			return fmt.Errorf("error: Could not create dir %v, got error %v", dir, err)
 		}
 	}
 
 	for k := 0; k < len(*r); k++ {
 		if k == 0 {
-			(*r)[k] = append((*r)[k], "SHA256")
+			(*r)[k] = append((*r)[k], "Hash")
 			continue
 		}
 
 		record := Record{
 			Format:           "CHIP-0007",
-			Name:             (*r)[k][2],
-			Description:      (*r)[k][3],
+			Name:             strings.TrimSpace((*r)[k][NAME]),
+			Description:      strings.TrimSpace((*r)[k][DESCRIPTION]),
 			SensitiveContent: false,
 			SeriesTotal:      420,
-			Attributes: []Attribute{
-				{
-					TraitType: "gender",
-					Value:     (*r)[k][4],
-				},
-			},
-			UUID: (*r)[k][6],
+			Gender:           strings.TrimSpace((*r)[k][GENDER]),
+			Attributes:       []Attribute{},
+			UUID:             strings.TrimSpace((*r)[k][UUID]),
 		}
 
-		attrbs := strings.Split((*r)[k][5], ";")
+		attrbs := strings.Split((*r)[k][ATTRIBUTES], ";")
 		if len(attrbs) > 1 && attrbs[0] != "" {
 			for _, v := range attrbs {
 				i := strings.Split(v, ":")
 				if len(i) > 1 {
 					attrb := Attribute{
-						TraitType: strings.ToLower(i[0]),
-						Value:     strings.ToLower(i[1]),
+						TraitType: strings.TrimSpace(strings.ToLower(i[0])),
+						Value:     strings.TrimSpace(strings.ToLower(i[1])),
 					}
 
 					record.Attributes = append(record.Attributes, attrb)
@@ -108,63 +137,78 @@ func convertRecords(r *[][]string, filename string) *[]Record {
 			}
 		}
 
-		if isTeamName(&record) {
-			mintingTool = (*r)[k][0]
+		if hasTeamName((*r)[k]) {
+			mintingTool = (*r)[k][TEAM_NAMES]
 		}
 
 		if !isValid(&record) {
 			continue
 		}
 
-		sn, err := strconv.Atoi((*r)[k][0])
+		sn, err := strconv.Atoi((*r)[k][SERIES_NUMBER])
 		if err != nil {
 			continue
 		}
 		record.SeriesNumber = sn
 		record.MintingTool = mintingTool
 
+		record.Collections = Collection{
+			Name: "Zuri NFT Tickets for Free Lunch",
+			ID:   "b774f676-c1d5-422e-beed-00ef5510c64d",
+			Attributes: []CAttribute{
+				{
+					"description",
+					"Rewards for accomplishments during HNGi9.",
+				},
+			},
+		}
+
 		rs, err := json.MarshalIndent(record, "", " ")
 		if err != nil {
-			log.Fatalf("error: Could not marshal json file")
+			return fmt.Errorf("error: Could not marshal json file")
 		}
 
-		sha, err := generateJSONFileSHA256((*r)[k][1], dir, rs)
+		sha, err := generateJSONFileSHA256((*r)[k][FILENAME], dir, rs)
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			return fmt.Errorf("error: %v", err)
 		}
 
-		record.Hash = string(sha)
-		(*r)[k] = append((*r)[k], record.Hash)
+		(*r)[k] = append((*r)[k], sha)
 
 		records = append(records, record)
 	}
 
-	return &records
+	return nil
 }
 
 // isValid checks that a record has some required fields
 func isValid(r *Record) bool {
-	return r.Description != "" && r.Name != "" && r.UUID != ""
+	return r.Description != "" && r.Name != "" && r.UUID != "" && r.Gender != ""
 }
 
-// isTeamName checks a record/row in the csv file to check if the row contains
-// only the team name
-func isTeamName(record *Record) bool {
-	return record.Name == "" && record.Description == "" && len(record.Attributes) == 1 && record.UUID == ""
+// HasTeamName checks a record/row in the csv file to ascertain
+// that the row contains a team name
+func hasTeamName(record []string) bool {
+	return record[TEAM_NAMES] != ""
 }
 
 // writeCSV creates a new csv file and writes the new data into it
-func writeCSV(filename string, records *[][]string) {
+func writeCSV(filename string, records *[][]string) error {
 	filename = strings.TrimSuffix(filename, ".csv")
 
 	file, err := os.Create(filename + ".output.csv")
 	if err != nil {
-		log.Fatal("error: Could not create output csv file")
+		return fmt.Errorf("error: Could not create output csv file")
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	writer.WriteAll(*records)
+	err = writer.WriteAll(*records)
+	if err != nil {
+		return fmt.Errorf("error: Could not write into output csv file")
+	}
+
+	return nil
 }
 
 // createJsonDir creates the directory where all JSON files will be stores
