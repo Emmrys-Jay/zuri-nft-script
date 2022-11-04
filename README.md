@@ -35,7 +35,6 @@ or copy the CSV file to your root directory.
 ```shell
 .\zuri-nft-script -csv <filename.csv>
 ```
-where filename is the name of the csv file you just copied.
 
 - The script generates a new CSV file `filename.output.csv` with an extra SHA256 field, 
 and a folder `nft-jsons` containing the CHIP-0007 json format files for each nft.
